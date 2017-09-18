@@ -23,12 +23,13 @@ class deref_iterator {
 public:
   deref_iterator(Iterator it): it(it) { }
   inline auto& operator*() noexcept { return **it; }
-  inline auto* operator->() noexcept { return *it; }
+  inline auto& operator->() noexcept { return *it; }
   inline auto& operator++() noexcept(noexcept(++it)) { ++it; return *this; }
   inline bool operator==(const deref_iterator& r) const noexcept
   { return it == r.it; }
   inline bool operator!=(const deref_iterator& r) const noexcept
   { return it != r.it; }
+  inline Iterator underlying() const noexcept { return it; }
 };
 
 template <typename T, typename Key = std::string,
@@ -37,8 +38,6 @@ template <typename T, typename Key = std::string,
 class ordered_map {
   std::unordered_map<Key,T,Hash,KeyEqual> map;
   std::vector<typename decltype(map)::iterator> order;
-
-  class error : ivanp::error { using ivanp::error::error; };
 
 public:
   using iterator =
@@ -59,7 +58,7 @@ public:
     try {
       return map.at(key);
     } catch (const std::out_of_range&) {
-      throw error("no key \"",key,'\"');
+      throw ivanp::error("no key \"",key,'\"');
     }
   }
   template <typename... Args>
@@ -96,6 +95,19 @@ public:
         return pred(a->first, b->first);
       }
     );
+  }
+
+  bool erase_key(const Key& key) {
+    const auto it = map.find(key);
+    if (it==map.end()) return false;
+    order.erase(std::find(order.begin(),order.end(),it));
+    map.erase(it);
+    return true;
+  }
+  iterator erase(iterator it) {
+    auto u = it.underlying();
+    map.erase(*u);
+    return order.erase(u);
   }
 };
 
