@@ -19,6 +19,8 @@ ROOT_LIBS += $(shell $(rpath_script))
 C_plot := $(ROOT_CFLAGS)
 L_plot := $(ROOT_LIBS) -lboost_regex
 
+L_edit := -lboost_regex
+
 SRC := src
 BIN := bin
 BLD := .build

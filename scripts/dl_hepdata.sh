@@ -1,14 +1,18 @@
 #/bin/bash
 
 # trac url:
-# https://svnweb.cern.ch/trac/atlasoff/browser/PhysicsAnalysis/HiggsPhys/Run2/HGamma/xAOD/HGamCrossSections/trunk/HGamEFTScanner
+# https://svnweb.cern.ch/trac/atlasoff/browser/
+# PhysicsAnalysis/HiggsPhys/Run2/HGamma/xAOD/HGamCrossSections/trunk/
+# HGamEFTScanner
 
 mkdir -p data
 
 printf "username: "
-read name
+read user
 
-svn export svn+ssh://${name}@svn.cern.ch/reps/atlasoff/\
+file=ATLAS_Run2_v4.HepData
+
+svn export svn+ssh://${user}@svn.cern.ch/reps/atlasoff/\
 PhysicsAnalysis/HiggsPhys/Run2/HGamma/xAOD/HGamCrossSections/trunk/\
-HGamEFTScanner/ATLAS_Run2_v4.HepData \
-data/
+HGamEFTScanner/$file \
+data/$file

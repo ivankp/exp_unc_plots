@@ -1,6 +1,8 @@
 #include <cmath>
 #include <iomanip>
 
+#include <boost/regex.hpp>
+
 #include "reader.hh"
 #include "program_options.hh"
 #include "terminal_colors.hh"
@@ -17,13 +19,23 @@ using std::endl;
 using namespace ivanp;
 using namespace ivanp::math;
 
+
+template <typename...> struct bad_type;
+
 template <typename T> const T& as_const(const T& x) { return x; }
+
+template <typename Res, typename S>
+bool match_any(const S& str, const Res& res) {
+  return std::any_of( res.begin(), res.end(),
+    [&](const auto& re){ return regex_match(str,re); } );
+}
 
 int main(int argc, char* argv[]) {
   std::vector<const char*> ifnames;
-  std::vector<const char*> add;
+  std::vector<const char*> add, rm, exclude;
   const char* ofname = nullptr;
   bool sym = false, invert_add = false;
+  unsigned top = 0;
 
   try {
     using namespace ivanp::po;
@@ -31,6 +43,7 @@ int main(int argc, char* argv[]) {
     if (program_options()
       (ifnames,'i',"input file name",pos())
       (ofname,'o',"output file name")
+      (rm,"--rm","remove these fields")
       (sym,"--sym","symmetrize uncertainties (take larger)")
       (add,"--add","sum these fields in quadrature",
         [&](const char* str, auto& x){
@@ -39,13 +52,17 @@ int main(int argc, char* argv[]) {
           x.push_back(str);
         })
       (add,"--add-except","sum all fields in quadrature except these\n"
-                          "first value is the name of the sum",
+                          "first value is the name of the sum\n"
+                          "only one of the two options may be used\n"
+                          "regex can be used here",
         [&](const char* str, auto& x){
           if (x.empty()) invert_add = true;
           else if (!invert_add) throw error(
-            "only one of the --add or --add-except options can be used");
+            "only one of the --add or --add-except options may be used");
           x.push_back(str);
         })
+      (top,"--top","keep top n contributions, combine others")
+      (exclude,"--exclude","fields that won't participate")
       .parse(argc,argv)) return 0;
 
       if (add.size()==1) throw error(
@@ -78,6 +95,25 @@ int main(int argc, char* argv[]) {
   }
 
   // ================================================================
+  if (!rm.empty()) {
+    std::vector<boost::regex> res;
+    res.reserve(rm.size());
+    for (const char* str : rm) res.emplace_back(str);
+    for (auto& x : var::all) {
+      auto& vals = x.second.vals;
+      auto last = vals.end();
+      for (auto it=vals.begin(); it!=last; ) {
+        if (match_any(it->first, res)) {
+          it = vals.erase(it);
+          last = vals.end();
+          continue;
+        }
+        ++it;
+      }
+    }
+  }
+
+  // ================================================================
   if (sym) {
     for (auto& x : var::all)
       for (auto& v : x.second.vals)
@@ -99,21 +135,22 @@ int main(int argc, char* argv[]) {
 
   // ================================================================
   if (!add.empty()) {
-    const auto first_field = ++add.cbegin();
-    const auto  last_field = add.cend();
+    std::vector<boost::regex> res;
+    res.reserve(add.size()-1);
+    for (const char* str : add) {
+      if (str==add.front()) continue;
+      res.emplace_back(str);
+    }
     for (auto& x : var::all) {
       auto& vals = x.second.vals;
       const unsigned n = x.second.bin_edges.size()-1;
       std::vector<double> sumd(n,0.);
       auto last = vals.end();
       for (auto it=vals.begin(); it!=last; ) {
-        if ((std::find_if( first_field, last_field,
-              [cmp=it->first.c_str()](const char* str){
-                return !strcmp(str,cmp); }) != last_field) != invert_add
-        ){
+        if (match_any(it->first, res) != invert_add) {
           for (unsigned i=0; i<n; ++i) {
             try {
-              sumd[i] += sq(std::stod(it->second[i]));
+              sumd[i] += sq(stod(it->second[i]));
             } catch (const std::exception& e) {
               cerr << TC_RED << e.what() << ":" TC_RST " "
                    << it->second[i] << endl;
@@ -130,6 +167,38 @@ int main(int argc, char* argv[]) {
       sum.reserve(n);
       for (double d : sumd)
         sum.emplace_back( cat(std::fixed,std::setprecision(8),std::sqrt(d)) );
+    }
+  }
+
+  // ================================================================
+  if (top) {
+    std::vector<boost::regex> res;
+    res.reserve(exclude.size());
+    for (const char* str : exclude) res.emplace_back(str);
+    for (auto& x : var::all) {
+      const auto& xsec = as_const(x.second.vals)["xsec"];
+      auto& vals = x.second.vals;
+      std::vector<std::pair<decltype(vals.begin()),double>> fields;
+      fields.reserve(vals.size());
+      for (auto it=vals.begin(); it!=vals.end(); ++it) {
+        if (match_any(it->first, res) || it->first=="xsec") continue;
+        fields.emplace_back(it,0.);
+        const auto& s = it->second;
+        for (unsigned i=0, n=s.size(); i<n; ++i)
+          fields.back().second += stod(s[i])/stod(xsec[i]);
+      }
+
+      std::partial_sort( fields.begin(), fields.begin()+top, fields.end(),
+        [](const auto& a, const auto& b){ return b.second < a.second; });
+      std::sort( fields.begin()+top, fields.end(),
+        [](const auto& a, const auto& b){ return ((b.first) < (a.first)); });
+
+      cout << '\n';
+      for (auto& p : fields) {
+        cout << p.first->first << endl;
+      }
+      cout << '\n';
+
     }
   }
 

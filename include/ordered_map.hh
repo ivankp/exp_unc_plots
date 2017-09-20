@@ -29,6 +29,8 @@ public:
   { return it == r.it; }
   inline bool operator!=(const deref_iterator& r) const noexcept
   { return it != r.it; }
+  inline bool operator<(const deref_iterator& r) const noexcept
+  { return it < r.it; }
   inline Iterator underlying() const noexcept { return it; }
 };
 
