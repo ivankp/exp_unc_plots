@@ -19,7 +19,7 @@ bool read_input(std::istream& in) {
     if (!reading_variable) {
       if (ivanp::starts_with(line,"*dataset:")) {
         const auto var_name = view(line,line.rfind('/')+1);
-        if (!var::all.emplace(var_name)) {
+        if (!var_t::all.emplace(var_name)) {
           cerr << TC_YLW "Line " << line_n
                << ": repeated variable:" TC_RST " "
                << var_name << endl;
@@ -28,7 +28,7 @@ bool read_input(std::istream& in) {
         reading_variable = true;
       }
     } else {
-      auto& x = var::all.back();
+      auto& x = var_t::all.back();
       const bool star = starts_with(line,"*");
       if ( star && x.second.bin_edges.empty()) continue;
       if (!star && !line.empty()) { // parse bin information
@@ -141,12 +141,12 @@ int main(int argc, char* argv[]) {
   }
 
   try {
-    var::check();
+    var_t::check();
   } catch (const std::exception& e) {
     cerr << TC_RED << e.what() << TC_RST << endl;
     return 1;
   }
 
-  if (!ofname) cout << var::all;
-  else std::ofstream(ofname) << var::all;
+  if (!ofname) cout << var_t::all;
+  else std::ofstream(ofname) << var_t::all;
 }

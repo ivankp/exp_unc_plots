@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iomanip>
+#include <tuple>
 
 #include <boost/regex.hpp>
 
@@ -19,9 +20,6 @@ using std::endl;
 using namespace ivanp;
 using namespace ivanp::math;
 
-
-template <typename...> struct bad_type;
-
 template <typename T> const T& as_const(const T& x) { return x; }
 
 template <typename Res, typename S>
@@ -30,12 +28,22 @@ bool match_any(const S& str, const Res& res) {
     [&](const auto& re){ return regex_match(str,re); } );
 }
 
+template <typename V, typename F>
+auto operator|(const V& v, F&& f) {
+  std::vector<decltype(f(*v.begin()))> out;
+  out.reserve(v.size());
+  for (const auto& x : v) out.emplace_back(f(x));
+  return out;
+}
+
+std::string dtos(double x) { return cat(std::fixed,std::setprecision(8),x); }
+
 int main(int argc, char* argv[]) {
   std::vector<const char*> ifnames;
   std::vector<const char*> add, rm, exclude;
   const char* ofname = nullptr;
   bool sym = false, invert_add = false;
-  unsigned top = 0;
+  std::tuple<unsigned,const char*> top {0,"others"};
 
   try {
     using namespace ivanp::po;
@@ -61,7 +69,8 @@ int main(int argc, char* argv[]) {
             "only one of the --add or --add-except options may be used");
           x.push_back(str);
         })
-      (top,"--top","keep top n contributions, combine others")
+      (top,"--top","keep top n contributions, combine others\n"
+                   "n:name or n, default name is \"others\"")
       (exclude,"--exclude","fields that won't participate")
       .parse(argc,argv)) return 0;
 
@@ -73,22 +82,22 @@ int main(int argc, char* argv[]) {
   }
 
   try { // READ =====================================================
-    if (ifnames.empty()) std::cin >> var::all;
+    if (ifnames.empty()) std::cin >> var_t::all;
     else for (unsigned i=0, n=ifnames.size(); i<n; ++i) {
-      if (!i) std::ifstream(ifnames[i]) >> var::all;
+      if (!i) std::ifstream(ifnames[i]) >> var_t::all;
       else { // replace if from subsequent files
-        var::all_t new_vars;
+        var_t::all_t new_vars;
         std::ifstream(ifnames[i]) >> new_vars;
-        for (auto& x2 : new_vars) {
-          auto& x1 = var::all[x2.first];
-          if (x1.bin_edges != x2.second.bin_edges) throw error(
-            "different binning for \"",x2.first,"\" in file ",ifnames[i]);
-          for (auto&& v2 : x2.second.vals)
-            x1.vals[v2.first] = std::move(v2.second);
+        for (auto& var2 : new_vars) {
+          auto& var1 = var_t::all[var2.first];
+          if (var1.bin_edges != var2.second.bin_edges) throw error(
+            "different binning for \"",var2.first,"\" in file ",ifnames[i]);
+          for (auto&& val2 : var2.second.vals)
+            var1.vals[val2.first] = std::move(val2.second);
         }
       }
     }
-    var::check();
+    var_t::check();
   } catch (const std::exception& e) {
     cerr << TC_RED << e.what() << TC_RST << endl;
     return 1;
@@ -99,8 +108,8 @@ int main(int argc, char* argv[]) {
     std::vector<boost::regex> res;
     res.reserve(rm.size());
     for (const char* str : rm) res.emplace_back(str);
-    for (auto& x : var::all) {
-      auto& vals = x.second.vals;
+    for (auto& var : var_t::all) {
+      auto& vals = var.second.vals;
       auto last = vals.end();
       for (auto it=vals.begin(); it!=last; ) {
         if (match_any(it->first, res)) {
@@ -115,17 +124,17 @@ int main(int argc, char* argv[]) {
 
   // ================================================================
   if (sym) {
-    for (auto& x : var::all)
-      for (auto& v : x.second.vals)
-        for (auto& s : v.second) {
+    for (auto& var : var_t::all)
+      for (auto& val : var.second.vals)
+        for (auto& s : val.second) {
           const auto d = s.find(',');
           if (d<s.size()) {
             const bool pm1 = (s[0]=='+' || s[0]=='-');
             const bool pm2 = (s[d+1]=='+' || s[d+1]=='-');
             auto s1 = s.substr(pm1,d-pm1);
             auto s2 = s.substr(d+1+pm2);
-            const auto u1 = std::stod(s1);
-            const auto u2 = std::stod(s2);
+            const auto u1 = stod(s1);
+            const auto u2 = stod(s2);
             s = (u1>u2 ? std::move(s1) : std::move(s2));
           } else if (s[0]=='-' || s[0]=='+') {
             s.erase(0,1);
@@ -141,14 +150,14 @@ int main(int argc, char* argv[]) {
       if (str==add.front()) continue;
       res.emplace_back(str);
     }
-    for (auto& x : var::all) {
-      auto& vals = x.second.vals;
-      const unsigned n = x.second.bin_edges.size()-1;
-      std::vector<double> sumd(n,0.);
+    for (auto& var : var_t::all) {
+      auto& vals = var.second.vals;
+      const unsigned nbins = var.second.bin_edges.size()-1;
+      std::vector<double> sumd(nbins,0.);
       auto last = vals.end();
       for (auto it=vals.begin(); it!=last; ) {
         if (match_any(it->first, res) != invert_add) {
-          for (unsigned i=0; i<n; ++i) {
+          for (unsigned i=0; i<nbins; ++i) {
             try {
               sumd[i] += sq(stod(it->second[i]));
             } catch (const std::exception& e) {
@@ -164,45 +173,69 @@ int main(int argc, char* argv[]) {
         ++it;
       }
       auto& sum = vals[add.front()];
-      sum.reserve(n);
-      for (double d : sumd)
-        sum.emplace_back( cat(std::fixed,std::setprecision(8),std::sqrt(d)) );
+      sum.reserve(nbins);
+      for (double d : sumd) // convert back to strings
+        sum.emplace_back(dtos(std::sqrt(d)));
     }
   }
 
   // ================================================================
-  if (top) {
+  if (std::get<0>(top)) {
+    const auto ntop = std::get<0>(top);
     std::vector<boost::regex> res;
     res.reserve(exclude.size());
     for (const char* str : exclude) res.emplace_back(str);
-    for (auto& x : var::all) {
-      const auto& xsec = as_const(x.second.vals)["xsec"];
-      auto& vals = x.second.vals;
-      std::vector<std::pair<decltype(vals.begin()),double>> fields;
+    for (auto& var : var_t::all) {
+      auto& vals = var.second.vals;
+      // parse xsec values
+      const auto xsec = as_const(vals)["xsec"] |
+        [](const auto& s){ return stod(s); };
+      const auto nbins = var.second.bin_edges.size()-1;
+      std::vector<
+          // map iterator, values in bins, impact metric
+          std::tuple< decltype(vals.begin()), std::vector<double>, double >
+        > fields;
       fields.reserve(vals.size());
       for (auto it=vals.begin(); it!=vals.end(); ++it) {
+        // exclude accordingly specified fields
         if (match_any(it->first, res) || it->first=="xsec") continue;
-        fields.emplace_back(it,0.);
-        const auto& s = it->second;
-        for (unsigned i=0, n=s.size(); i<n; ++i)
-          fields.back().second += stod(s[i])/stod(xsec[i]);
+        fields.emplace_back(it,nbins,0.);
+        const auto& bins = it->second;
+        for (unsigned i=0; i<nbins; ++i) {
+          const double x = stod(bins[i]);
+          // cache parsed numbers
+          std::get<1>(fields.back())[i] = x;
+          // use sum of fractional uncertainties as impact metric
+          std::get<2>(fields.back())   += x/xsec[i];
+        }
       }
 
-      std::partial_sort( fields.begin(), fields.begin()+top, fields.end(),
-        [](const auto& a, const auto& b){ return b.second < a.second; });
-      std::sort( fields.begin()+top, fields.end(),
-        [](const auto& a, const auto& b){ return ((b.first) < (a.first)); });
+      // select top contributions (descending)
+      std::partial_sort( fields.begin(), fields.begin()+ntop, fields.end(),
+        [](const auto& a, const auto& b){
+          return std::get<2>(b) < std::get<2>(a); });
+      // re-sort back minor contributions by order (backward)
+      std::sort( fields.begin()+ntop, fields.end(),
+        [](const auto& a, const auto& b){
+          return std::get<0>(b) < std::get<0>(a); });
 
-      cout << '\n';
-      for (auto& p : fields) {
-        cout << p.first->first << endl;
+      // sum others in quadrature and erase contributions
+      std::vector<double> sumd(nbins,0.);
+      for (auto it=fields.begin()+ntop; it!=fields.end(); ++it) {
+        for (unsigned i=0; i<nbins; ++i)
+          sumd[i] += sq( std::get<1>(*it)[i] );
+        vals.erase(std::get<0>(*it));
       }
-      cout << '\n';
 
+      // add others to vars
+      auto& sum = vals[std::get<1>(top)];
+      sum.reserve(nbins);
+      for (double d : sumd) // convert back to strings
+        sum.emplace_back(dtos(std::sqrt(d)));
     }
   }
 
   // ================================================================
-  if (!ofname) cout << var::all;
-  else std::ofstream(ofname) << var::all;
+  if (!ofname) cout << var_t::all;
+  else std::ofstream(ofname) << var_t::all;
 }

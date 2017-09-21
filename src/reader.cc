@@ -2,9 +2,9 @@
 
 using ivanp::error;
 
-var::all_t var::all;
+var_t::all_t var_t::all;
 
-std::ostream& operator<<(std::ostream& out, const var::all_t& vars) {
+std::ostream& operator<<(std::ostream& out, const var_t::all_t& vars) {
   for (const auto& x : vars) {
     out << x.first << ".bins:";
     for (const auto& b : x.second.bin_edges) out << ' ' << b;
@@ -19,8 +19,8 @@ std::ostream& operator<<(std::ostream& out, const var::all_t& vars) {
   return out;
 }
 
-void var::check() {
-  for (const auto& x : var::all) {
+void var_t::check() {
+  for (const auto& x : var_t::all) {
     if (x.second.bin_edges.empty()) throw error(
       "no bins for variable \"",x.first,'\"');
     const auto nbins = x.second.bin_edges.size()-1;
@@ -32,7 +32,7 @@ void var::check() {
   }
 }
 
-std::istream& operator>>(std::istream& in, var::all_t& vars) {
+std::istream& operator>>(std::istream& in, var_t::all_t& vars) {
   unsigned line_n = 0;
   for (std::string line; std::getline(in,line); ) {
     if (std::all_of(line.begin(),line.end(),

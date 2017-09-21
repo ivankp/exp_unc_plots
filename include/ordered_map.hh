@@ -21,17 +21,17 @@ template <typename Iterator>
 class deref_iterator {
   Iterator it;
 public:
-  deref_iterator(Iterator it): it(it) { }
+  constexpr deref_iterator(Iterator it): it(it) { }
   inline auto& operator*() noexcept { return **it; }
   inline auto& operator->() noexcept { return *it; }
   inline auto& operator++() noexcept(noexcept(++it)) { ++it; return *this; }
-  inline bool operator==(const deref_iterator& r) const noexcept
+  constexpr bool operator==(const deref_iterator& r) const noexcept
   { return it == r.it; }
-  inline bool operator!=(const deref_iterator& r) const noexcept
+  constexpr bool operator!=(const deref_iterator& r) const noexcept
   { return it != r.it; }
-  inline bool operator<(const deref_iterator& r) const noexcept
+  constexpr bool operator<(const deref_iterator& r) const noexcept
   { return it < r.it; }
-  inline Iterator underlying() const noexcept { return it; }
+  constexpr Iterator underlying() const noexcept { return it; }
 };
 
 template <typename T, typename Key = std::string,
