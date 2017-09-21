@@ -3,15 +3,19 @@
 #include <tuple>
 
 #include <boost/regex.hpp>
+#include <boost/lexical_cast.hpp>
+
+#include "termcolor.hpp"
 
 #include "reader.hh"
 #include "program_options.hh"
-#include "terminal_colors.hh"
 #include "error.hh"
 #include "math.hh"
 
+namespace tc = termcolor;
+
 #define TEST(var) \
-  std::cout << TC_CYN #var TC_RST " = " << var << std::endl;
+  std::cout << tc::cyan << #var << tc::reset << " = " << var << std::endl;
 
 using std::cout;
 using std::cerr;
@@ -36,9 +40,21 @@ auto operator|(const V& v, F&& f) {
   return out;
 }
 
+double stod(const std::string& str) {
+  try {
+    return boost::lexical_cast<double>(str);
+  } catch (const boost::bad_lexical_cast& e) {
+    throw error("cannot interpret \"",str,"\" as double");
+  }
+}
+
 unsigned prec = 8;
 std::string dtos(double x) {
   return cat(std::fixed,std::setprecision(prec),x);
+}
+
+std::ostream& operator<<(std::ostream& out, const std::exception& e) {
+  return out << tc::red << e.what() << tc::reset;
 }
 
 int main(int argc, char* argv[]) {
@@ -81,7 +97,7 @@ int main(int argc, char* argv[]) {
       if (add.size()==1) throw error(
         "--add or --add-except options take at least 2 arguments");
   } catch (const std::exception& e) {
-    cerr << TC_RED << e.what() << TC_RST << endl;
+    cerr << e << endl;
     return 1;
   }
 
@@ -103,7 +119,7 @@ int main(int argc, char* argv[]) {
     }
     var_t::check();
   } catch (const std::exception& e) {
-    cerr << TC_RED << e.what() << TC_RST << endl;
+    cerr << e << endl;
     return 1;
   }
 
@@ -137,8 +153,14 @@ int main(int argc, char* argv[]) {
             const bool pm2 = (s[d+1]=='+' || s[d+1]=='-');
             auto s1 = s.substr(pm1,d-pm1);
             auto s2 = s.substr(d+1+pm2);
-            const auto u1 = stod(s1);
-            const auto u2 = stod(s2);
+            double u1, u2;
+            try {
+              u1 = ::stod(s1);
+              u2 = ::stod(s2);
+            } catch (const std::exception& e) {
+              cerr << e << endl;
+              return 1;
+            }
             s = (u1>u2 ? std::move(s1) : std::move(s2));
           } else if (s[0]=='-' || s[0]=='+') {
             s.erase(0,1);
@@ -163,16 +185,19 @@ int main(int argc, char* argv[]) {
         if (match_any(it->first, res) != invert_add) {
           for (unsigned i=0; i<nbins; ++i) {
             try {
-              sumd[i] += sq(stod(it->second[i]));
+              sumd[i] += sq(::stod(it->second[i]));
             } catch (const std::exception& e) {
-              cerr << TC_RED << e.what() << ":" TC_RST " "
-                   << it->second[i] << endl;
+              cerr << e << endl;
               return 1;
             }
           }
-          it = vals.erase(it);
-          last = vals.end();
-          continue;
+          if (strcmp(it->first.c_str(),add.front())) {
+            it = vals.erase(it);
+            last = vals.end();
+            continue;
+          } else {
+            it->second.clear();
+          }
         }
         ++it;
       }
@@ -189,39 +214,61 @@ int main(int argc, char* argv[]) {
     std::vector<boost::regex> res;
     res.reserve(exclude.size());
     for (const char* str : exclude) res.emplace_back(str);
-    for (auto& var : var_t::all) {
+    for (auto& var : var_t::all) { // outer loop
       auto& vals = var.second.vals;
       // parse xsec values
-      const auto xsec = as_const(vals)["xsec"] |
-        [](const auto& s){ return stod(s); };
+      std::vector<double> xsec;
+      try {
+        xsec = as_const(vals)["xsec"] |
+          [](const auto& s){ return ::stod(s); };
+      } catch (const std::exception& e) {
+        cerr << e << endl;
+        return 1;
+      }
       const auto nbins = var.second.bin_edges.size()-1;
-      std::vector<
-          // map iterator, values in bins, impact metric
-          std::tuple< decltype(vals.begin()), std::vector<double>, double >
-        > fields;
+      using iter = decltype(vals.begin());
+      // map iterator, values in bins, impact metric
+      std::vector<std::tuple< iter, std::vector<double>, double >> fields;
       fields.reserve(vals.size());
+      std::vector<const std::string*> order; // preserve fields' order
+      order.reserve(exclude.size()+ntop+1);
       for (auto it=vals.begin(); it!=vals.end(); ++it) {
         // exclude accordingly specified fields
-        if (match_any(it->first, res) || it->first=="xsec") continue;
+        if (match_any(it->first, res) || it->first=="xsec") {
+          order.push_back(&it->first);
+          continue;
+        }
         fields.emplace_back(it,nbins,0.);
         const auto& bins = it->second;
         for (unsigned i=0; i<nbins; ++i) {
-          const double x = stod(bins[i]);
+          double x;
+          try {
+            x = ::stod(bins[i]);
+          } catch (const std::exception& e) {
+            cerr << e << endl;
+            return 1;
+          }
           // cache parsed numbers
           std::get<1>(fields.back())[i] = x;
           // use sum of fractional uncertainties as impact metric
-          std::get<2>(fields.back())   += x/xsec[i];
+          std::get<2>(fields.back()) += x/xsec[i];
         }
       }
 
       // select top contributions (descending)
       std::partial_sort( fields.begin(), fields.begin()+ntop, fields.end(),
         [](const auto& a, const auto& b){
-          return std::get<2>(b) < std::get<2>(a); });
+          return std::get<2>(a) > std::get<2>(b); });
       // re-sort back minor contributions by order (backward)
       std::sort( fields.begin()+ntop, fields.end(),
         [](const auto& a, const auto& b){
-          return std::get<0>(b) < std::get<0>(a); });
+          return std::get<0>(a) > std::get<0>(b); });
+
+      // keep order of top contributions
+      for (unsigned i=0; i<ntop; ++i) {
+        TEST( std::get<2>(fields[i]) ) // test impact metric
+        order.push_back(&std::get<0>(fields[i])->first);
+      }
 
       // sum others in quadrature and erase contributions
       std::vector<double> sumd(nbins,0.);
@@ -236,6 +283,16 @@ int main(int argc, char* argv[]) {
       sum.reserve(nbins);
       for (double d : sumd) // convert back to strings
         sum.emplace_back(dtos(std::sqrt(d)));
+      order.push_back(&vals.back().first);
+
+      // apply order
+      vals.sort([
+          f = [&order](const std::string* sp){
+            return std::find(order.begin(),order.end(),sp);
+          }
+        ](const auto& a, const auto& b){
+          return f(&a.first) < f(&b.first);
+        });
     }
   }
 

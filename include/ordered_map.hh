@@ -31,6 +31,8 @@ public:
   { return it != r.it; }
   constexpr bool operator<(const deref_iterator& r) const noexcept
   { return it < r.it; }
+  constexpr bool operator>(const deref_iterator& r) const noexcept
+  { return it > r.it; }
   constexpr Iterator underlying() const noexcept { return it; }
 };
 
@@ -93,10 +95,7 @@ public:
   void sort(Pred&& pred) {
     using it_t = typename decltype(order)::value_type;
     std::sort( order.begin(), order.end(),
-      [&pred](const it_t& a, const it_t& b) {
-        return pred(a->first, b->first);
-      }
-    );
+      [&pred](const it_t& a, const it_t& b) { return pred(*a,*b); });
   }
 
   bool erase_key(const Key& key) {

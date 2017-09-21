@@ -10,7 +10,7 @@ mkdir -p data
 printf "username: "
 read user
 
-file=ATLAS_Run2_v4.HepData
+file=${1:-ATLAS_Run2_v4.HepData}
 
 svn export svn+ssh://${user}@svn.cern.ch/reps/atlasoff/\
 PhysicsAnalysis/HiggsPhys/Run2/HGamma/xAOD/HGamCrossSections/trunk/\

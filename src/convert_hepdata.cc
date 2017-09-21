@@ -1,15 +1,22 @@
+#include "termcolor.hpp"
+
 #include "reader.hh"
 #include "program_options.hh"
-#include "terminal_colors.hh"
 #include "error.hh"
 
+namespace tc = termcolor;
+
 #define TEST(var) \
-  std::cout << TC_CYN #var TC_RST " = " << var << std::endl;
+  std::cout << tc::cyan << #var << tc::reset << " = " << var << std::endl;
 
 using std::cout;
 using std::cerr;
 using std::endl;
 using ivanp::starts_with;
+
+std::ostream& operator<<(std::ostream& out, const std::exception& e) {
+  return out << tc::red << e.what() << tc::reset;
+}
 
 bool read_input(std::istream& in) {
   bool reading_variable = false;
@@ -20,8 +27,8 @@ bool read_input(std::istream& in) {
       if (ivanp::starts_with(line,"*dataset:")) {
         const auto var_name = view(line,line.rfind('/')+1);
         if (!var_t::all.emplace(var_name)) {
-          cerr << TC_YLW "Line " << line_n
-               << ": repeated variable:" TC_RST " "
+          cerr << tc::yellow << "Line " << line_n
+               << ": repeated variable:" << tc::reset << " "
                << var_name << endl;
           continue;
         }
@@ -34,8 +41,8 @@ bool read_input(std::istream& in) {
       if (!star && !line.empty()) { // parse bin information
         const auto d1 = line.find(';');
         if (d1==std::string::npos) {
-          cerr << TC_RED "Line " << line_n
-               << ": expected \';\'" TC_RST << endl;
+          cerr << tc::red << "Line " << line_n
+               << ": expected \';\'" << tc::reset << endl;
           return 1;
         }
         auto chunk = view(line,0,d1);
@@ -45,17 +52,17 @@ bool read_input(std::istream& in) {
         const auto max = peal_head(chunk);
 
         if (!min || !max || to!="TO") {
-          cerr << TC_RED "Line " << line_n
-               << ": unexpected bin definition:" TC_RST " "
+          cerr << tc::red << "Line " << line_n
+               << ": unexpected bin definition:" << tc::reset << ' '
                << view(line,0,d1) << endl;
           return 1;
         }
 
         if (x.second.bin_edges.empty()) x.second.bin_edges.emplace_back(min);
         else if (x.second.bin_edges.back()!=min) {
-          cerr << TC_RED "Line " << line_n
-               << ": mismatch in bin edges:" TC_RST
-                  " in \"" << x.first << "\" " << x.second.bin_edges.back()
+          cerr << tc::red << "Line " << line_n
+               << ": mismatch in bin edges:" << tc::reset
+               << " in \"" << x.first << "\" " << x.second.bin_edges.back()
                << " and " << min << endl;
           return 1;
         }
@@ -63,8 +70,8 @@ bool read_input(std::istream& in) {
 
         const auto d2 = line.find('(',d1+1);
         if (d2==std::string::npos) {
-          cerr << TC_RED "Line " << line_n
-               << ": expected \'(\'" TC_RST << endl;
+          cerr << tc::red << "Line " << line_n
+               << ": expected \'(\'" << tc::reset << endl;
           return 1;
         }
         chunk = view(line,d1+1,d2-d1-1);
@@ -74,8 +81,8 @@ bool read_input(std::istream& in) {
         const auto stat = peal_head(chunk);
 
         if (!xsec || !stat || pm!="+-") {
-          cerr << TC_RED "Line " << line_n
-               << ": unexpected bin definition:" TC_RST " "
+          cerr << tc::red << "Line " << line_n
+               << ": unexpected bin definition:" << tc::reset << ' '
                << view(line,d1+1,d2-d1-1) << endl;
           return 1;
         }
@@ -93,8 +100,8 @@ bool read_input(std::istream& in) {
           if (eol) {
             last = line.rfind(')');
             if (last==std::string::npos) {
-              cerr << TC_RED "Line " << line_n << ":" TC_RST
-                      " missing closing \')\'" << endl;
+              cerr << tc::red << "Line " << line_n << ":" << tc::reset
+                   << " missing closing \')\'" << endl;
               return 1;
             } else eol = true;
           }
@@ -104,7 +111,8 @@ bool read_input(std::istream& in) {
           chunk = view(line,first,last-first); // view
 
           const auto d = chunk.find(':');
-          x.second.vals[std::string(chunk.substr(d+1))].emplace_back(chunk.substr(0,d));
+          x.second.vals[std::string(chunk.substr(d+1))]
+            .emplace_back(chunk.substr(0,d));
 
           if (!eol) {
             first = last + 1;
@@ -129,7 +137,7 @@ int main(int argc, char* argv[]) {
       (ofname,'o',"output file name")
       .parse(argc,argv)) return 0;
   } catch (const std::exception& e) {
-    cerr << TC_RED << e.what() << TC_RST << endl;
+    cerr << e << endl;
     return 1;
   }
 
@@ -143,7 +151,7 @@ int main(int argc, char* argv[]) {
   try {
     var_t::check();
   } catch (const std::exception& e) {
-    cerr << TC_RED << e.what() << TC_RST << endl;
+    cerr << e << endl;
     return 1;
   }
 
