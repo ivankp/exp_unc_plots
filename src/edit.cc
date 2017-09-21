@@ -36,7 +36,10 @@ auto operator|(const V& v, F&& f) {
   return out;
 }
 
-std::string dtos(double x) { return cat(std::fixed,std::setprecision(8),x); }
+unsigned prec = 8;
+std::string dtos(double x) {
+  return cat(std::fixed,std::setprecision(prec),x);
+}
 
 int main(int argc, char* argv[]) {
   std::vector<const char*> ifnames;
@@ -72,6 +75,7 @@ int main(int argc, char* argv[]) {
       (top,"--top","keep top n contributions, combine others\n"
                    "n:name or n, default name is \"others\"")
       (exclude,"--exclude","fields that won't participate")
+      (prec,"--prec","double to string precision, default is 8")
       .parse(argc,argv)) return 0;
 
       if (add.size()==1) throw error(
