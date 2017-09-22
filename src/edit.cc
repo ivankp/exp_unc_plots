@@ -1,4 +1,5 @@
 #include <cmath>
+#include <iostream>
 #include <iomanip>
 #include <tuple>
 
@@ -10,10 +11,8 @@
 
 #include "reader.hh"
 #include "program_options.hh"
-#include "error.hh"
 #include "math.hh"
-
-namespace tc = termcolor;
+#include "error.hh"
 
 #define TEST(var) \
   std::cerr << tc::cyan << #var << tc::reset << " = " << var << std::endl;
@@ -21,17 +20,11 @@ namespace tc = termcolor;
 using std::cout;
 using std::cerr;
 using std::endl;
-
+namespace tc = termcolor;
 using namespace ivanp;
 using namespace ivanp::math;
 
 template <typename T> const T& as_const(const T& x) { return x; }
-
-template <typename Res, typename S>
-bool match_any(const S& str, const Res& res) {
-  return std::any_of( res.begin(), res.end(),
-    [&](const auto& re){ return regex_match(str,re); } );
-}
 
 template <typename V, typename F>
 auto operator|(const V& v, F&& f) {
@@ -41,11 +34,21 @@ auto operator|(const V& v, F&& f) {
   return out;
 }
 
+std::ostream& operator<<(std::ostream& out, const std::exception& e) {
+  return out << tc::red << e.what() << tc::reset;
+}
+
+template <typename Res, typename S>
+bool match_any(const S& str, const Res& res) {
+  return std::any_of( res.begin(), res.end(),
+    [&](const auto& re){ return regex_match(str,re); } );
+}
+
 double stod(const std::string& str) {
   try {
     return boost::lexical_cast<double>(str);
   } catch (const boost::bad_lexical_cast& e) {
-    throw error("cannot interpret \"",str,"\" as double");
+    throw ivanp::error("cannot interpret \"",str,"\" as double");
   }
 }
 
@@ -54,13 +57,9 @@ std::string dtos(double x) {
   return cat(std::fixed,std::setprecision(prec),x);
 }
 
-std::ostream& operator<<(std::ostream& out, const std::exception& e) {
-  return out << tc::red << e.what() << tc::reset;
-}
-
 int main(int argc, char* argv[]) {
   std::vector<const char*> ifnames;
-  std::vector<const char*> add, rm, exclude;
+  std::vector<const char*> add, rm, exclude, order;
   const char* ofname = nullptr;
   bool sym = false, invert_add = false;
   std::tuple<unsigned,const char*> top {0,"others"};
@@ -80,21 +79,24 @@ int main(int argc, char* argv[]) {
             "only one of the --add or --add-except options can be used");
           x.push_back(str);
         })
-      (add,"--add-except","sum all fields in quadrature except these\n"
-                          "first value is the name of the sum\n"
-                          "only one of the two options may be used\n"
-                          "regex can be used here",
+      (add,"--add-except",
+        "sum all fields in quadrature except these\n"
+        "first value is the name of the sum\n"
+        "only one of the two options may be used\n"
+        "regex can be used here",
         [&](const char* str, auto& x){
           if (x.empty()) invert_add = true;
           else if (!invert_add) throw error(
             "only one of the --add or --add-except options may be used");
           x.push_back(str);
         })
-      (top,"--top","keep top n contributions, combine others\n"
-                   "n:name or n, default name is \"others\"")
+      (top,"--top",
+        "keep top n contributions, combine others\n"
+        "n:name or n, default name is \"others\"")
       (exclude,"--exclude","fields that won't participate")
       (prec,"--prec","double to string precision, default is 8")
       (tol,"--tol","fractional tolerance when comparing binning")
+      (order,"--order","set order of fields")
       .parse(argc,argv)) return 0;
 
       if (!invert_add && add.size()==1) throw error(
@@ -306,6 +308,20 @@ int main(int argc, char* argv[]) {
           }
         ](const auto& a, const auto& b){
           return f(&a.first) < f(&b.first);
+        });
+    }
+  }
+
+  // ================================================================
+  if (!order.empty()) {
+    for (auto& var : var_t::all) {
+      var.second.vals.sort([
+          f = [&order](const char* name){
+            return std::find_if(order.begin(),order.end(),
+              [name](const char* str){ return !strcmp(name,str); });
+          }
+        ](const auto& a, const auto& b){
+          return f(a.first.c_str()) < f(b.first.c_str());
         });
     }
   }

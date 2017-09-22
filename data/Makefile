@@ -20,7 +20,8 @@ mc.dat: MCpredictions_v3.data hepdata2.dat
 	mc.sh $^ | edit -o $@ --add-except=xsec
 
 uncert.dat: hepdata2.dat mc.dat
-	edit $^ -o $@ --add-except=corr xsec stat lumi fit --tol=0.01
+	edit $^ -o $@ --add-except=corr xsec stat lumi fit --tol=0.01 \
+	  --order xsec lumi corr fit stat
 
 uncert_corr.dat: hepdata2.dat
 	edit $^ -o $@ --rm stat lumi fit --top=4:others

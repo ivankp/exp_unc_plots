@@ -1,17 +1,11 @@
-#include "termcolor.hpp"
-
 #include "reader.hh"
 #include "program_options.hh"
-#include "error.hh"
-
-namespace tc = termcolor;
-
-#define TEST(var) \
-  std::cout << tc::cyan << #var << tc::reset << " = " << var << std::endl;
+#include "termcolor.hpp"
 
 using std::cout;
 using std::cerr;
 using std::endl;
+namespace tc = termcolor;
 using ivanp::starts_with;
 
 std::ostream& operator<<(std::ostream& out, const std::exception& e) {

@@ -3,7 +3,7 @@ STD := -std=c++14
 DF := $(STD) -Iinclude
 CF := $(STD) -Wall -O3 -flto -Iinclude -fmax-errors=3
 # CF := $(STD) -Wall -g -Iinclude -fmax-errors=3
-LF := $(STD) -flto
+LF := $(STD) -O3 -flto
 
 ROOT_CFLAGS := $(shell root-config --cflags)
 ROOT_LIBS   := $(shell root-config --libs)
@@ -17,7 +17,7 @@ rpath_script := ldd `root-config --libdir`/libTreePlayer.so \
 ROOT_LIBS += $(shell $(rpath_script))
 
 C_plot := $(ROOT_CFLAGS)
-L_plot := $(ROOT_LIBS) -lboost_regex
+L_plot := $(ROOT_LIBS)
 
 L_edit := -lboost_regex
 
