@@ -4,6 +4,7 @@
 
 #include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/optional.hpp>
 
 #include "termcolor.hpp"
 
@@ -15,7 +16,7 @@
 namespace tc = termcolor;
 
 #define TEST(var) \
-  std::cout << tc::cyan << #var << tc::reset << " = " << var << std::endl;
+  std::cerr << tc::cyan << #var << tc::reset << " = " << var << std::endl;
 
 using std::cout;
 using std::cerr;
@@ -63,6 +64,7 @@ int main(int argc, char* argv[]) {
   const char* ofname = nullptr;
   bool sym = false, invert_add = false;
   std::tuple<unsigned,const char*> top {0,"others"};
+  boost::optional<double> tol;
 
   try {
     using namespace ivanp::po;
@@ -92,10 +94,11 @@ int main(int argc, char* argv[]) {
                    "n:name or n, default name is \"others\"")
       (exclude,"--exclude","fields that won't participate")
       (prec,"--prec","double to string precision, default is 8")
+      (tol,"--tol","fractional tolerance when comparing binning")
       .parse(argc,argv)) return 0;
 
-      if (add.size()==1) throw error(
-        "--add or --add-except options take at least 2 arguments");
+      if (!invert_add && add.size()==1) throw error(
+        "--add takes at least 2 arguments");
   } catch (const std::exception& e) {
     cerr << e << endl;
     return 1;
@@ -110,8 +113,20 @@ int main(int argc, char* argv[]) {
         std::ifstream(ifnames[i]) >> new_vars;
         for (auto& var2 : new_vars) {
           auto& var1 = var_t::all[var2.first];
-          if (var1.bin_edges != var2.second.bin_edges) throw error(
+
+          if ( tol ?
+            !std::equal(
+              var1.bin_edges.begin(), var1.bin_edges.end(),
+              var2.second.bin_edges.begin(), var2.second.bin_edges.end(),
+              [&](const auto& s1, const auto& s2){
+                const auto x1 = ::stod(s1), x2 = ::stod(s2);
+                if (x1==x2) return true;
+                return std::abs(1.-x1/x2) < *tol;
+              }
+            ) : ( var1.bin_edges != var2.second.bin_edges )
+          ) throw error(
             "different binning for \"",var2.first,"\" in file ",ifnames[i]);
+
           for (auto&& val2 : var2.second.vals)
             var1.vals[val2.first] = std::move(val2.second);
         }
@@ -283,7 +298,6 @@ int main(int argc, char* argv[]) {
       sum.reserve(nbins);
       for (double d : sumd) // convert back to strings
         sum.emplace_back(dtos(std::sqrt(d)));
-      order.push_back(&vals.back().first);
 
       // apply order
       vals.sort([

@@ -5,6 +5,10 @@
 !Makefile
 !include/
 !src/
-!scripts/
+!scr/
+
+!data/
+data/*
+!data/Makefile
 
 **.swp
