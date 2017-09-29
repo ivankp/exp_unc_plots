@@ -6,12 +6,14 @@
 !include/
 !src/
 !scr/
+!config/
 
 !data/
 data/*
 !data/Makefile
 
 !plots/
-plots/*.pdf
+plots/*
+!plots/Makefile
 
 **.swp

@@ -10,7 +10,7 @@ all: $(DATA2)
 $(DATA1):
 	dl.sh
 
-hepdata1.dat: ATLAS_Run2_v3.HepData
+hepdata1.dat: ATLAS_Run2_v4.HepData
 	convert_hepdata $^ | edit -o $@ --sym
 
 hepdata2.dat: hepdata1.dat

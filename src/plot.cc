@@ -206,6 +206,17 @@ int main(int argc, char* argv[]) {
     ya->SetTitleSize(0.065);
     ya->SetLabelSize(0.05);
 
+    if (starts_with(var.first,"N_j_")) {
+      for (unsigned i=0; i<nbins; ++i) {
+        xa->SetBinLabel( i+1, cat(
+          nbins-i>1 ? " = " : " #geq ", std::ceil(bins[i])
+        ).c_str() );
+      }
+      xa->SetLabelSize(0.08);
+    } else if (var.first.substr(0,4)=="fid_") {
+      xa->SetBinLabel(1,"");
+    }
+
     TLegend leg(0.14, 0.165, 0.92, 0.285);
     leg.SetLineWidth(0);
     leg.SetFillColor(0);
