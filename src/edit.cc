@@ -57,11 +57,36 @@ std::string dtos(double x) {
   return cat(std::fixed,std::setprecision(prec),x);
 }
 
+class add_opt {
+public:
+  enum opt_type { add, qadd, eadd, eqadd };
+private:
+  enum opt_type opt;
+  using type = std::vector<const char*>;
+  type v;
+public:
+  const type& operator*() const noexcept { return v; }
+  const type* operator->() const noexcept { return &v; }
+
+  bool  inv() const noexcept { return opt==eadd || opt==eqadd; }
+  bool quad() const noexcept { return opt==qadd || opt==eqadd; }
+
+  static auto parser(opt_type opt) {
+    return [opt](const char* str, add_opt& x) {
+      if (x->empty()) x.opt = opt;
+      else if (opt!=x.opt) throw error(
+        "only one of --add options can be used");
+      x.v.push_back(str);
+    };
+  }
+};
+
 int main(int argc, char* argv[]) {
   std::vector<const char*> ifnames;
-  std::vector<const char*> add, rm, exclude, order;
+  std::vector<const char*> rm, exclude, order;
+  add_opt add;
   const char* ofname = nullptr;
-  bool sym = false, invert_add = false;
+  bool sym = false;
   std::tuple<unsigned,const char*> top {0,"others"};
   boost::optional<double> tol;
 
@@ -73,23 +98,18 @@ int main(int argc, char* argv[]) {
       (ofname,'o',"output file name")
       (rm,"--rm","remove these fields")
       (sym,"--sym","symmetrize uncertainties (take larger)")
-      (add,"--add","sum these fields in quadrature",
-        [&](const char* str, auto& x){
-          if (!x.empty() && invert_add) throw error(
-            "only one of the --add or --add-except options can be used");
-          x.push_back(str);
-        })
-      (add,"--add-except",
+      (add,"--add","sum these fields",
+        add_opt::parser(add_opt::add), multi())
+      (add,"--qadd","sum these fields in quadrature",
+        add_opt::parser(add_opt::qadd), multi())
+      (add,"--add-except","sum all fields except these",
+        add_opt::parser(add_opt::eadd), multi())
+      (add,"--qadd-except",
         "sum all fields in quadrature except these\n"
         "first value is the name of the sum\n"
-        "only one of the two options may be used\n"
+        "only one of the add options may be used\n"
         "regex can be used here",
-        [&](const char* str, auto& x){
-          if (x.empty()) invert_add = true;
-          else if (!invert_add) throw error(
-            "only one of the --add or --add-except options may be used");
-          x.push_back(str);
-        })
+        add_opt::parser(add_opt::eqadd), multi())
       (top,"--top",
         "keep top n contributions, combine others\n"
         "n:name or n, default name is \"others\"")
@@ -99,7 +119,7 @@ int main(int argc, char* argv[]) {
       (order,"--order","set order of fields")
       .parse(argc,argv)) return 0;
 
-      if (!invert_add && add.size()==1) throw error(
+      if (!add.inv() && add->size()==1) throw error(
         "--add takes at least 2 arguments");
   } catch (const std::exception& e) {
     cerr << e << endl;
@@ -186,11 +206,11 @@ int main(int argc, char* argv[]) {
   }
 
   // ================================================================
-  if (!add.empty()) {
+  if (!add->empty()) {
     std::vector<boost::regex> res;
-    res.reserve(add.size()-1);
-    for (const char* str : add) {
-      if (str==add.front()) continue;
+    res.reserve(add->size()-1);
+    for (const char* str : *add) {
+      if (str==add->front()) continue;
       res.emplace_back(str);
     }
     for (auto& var : var_t::all) {
@@ -199,16 +219,17 @@ int main(int argc, char* argv[]) {
       std::vector<double> sumd(nbins,0.);
       auto last = vals.end();
       for (auto it=vals.begin(); it!=last; ) {
-        if (match_any(it->first, res) != invert_add) {
+        if (match_any(it->first, res) != add.inv()) {
           for (unsigned i=0; i<nbins; ++i) {
             try {
-              sumd[i] += sq(::stod(it->second[i]));
+              const auto x = ::stod(it->second[i]);
+              sumd[i] += (!add.quad() ? x : x*x);
             } catch (const std::exception& e) {
               cerr << e << endl;
               return 1;
             }
           }
-          if (strcmp(it->first.c_str(),add.front())) {
+          if (strcmp(it->first.c_str(),add->front())) {
             it = vals.erase(it);
             last = vals.end();
             continue;
@@ -218,10 +239,10 @@ int main(int argc, char* argv[]) {
         }
         ++it;
       }
-      auto& sum = vals[add.front()];
+      auto& sum = vals[add->front()];
       sum.reserve(nbins);
       for (double d : sumd) // convert back to strings
-        sum.emplace_back(dtos(std::sqrt(d)));
+        sum.emplace_back(dtos(!add.quad() ? d : std::sqrt(d)));
     }
   }
 
@@ -283,7 +304,7 @@ int main(int argc, char* argv[]) {
 
       // keep order of top contributions
       for (unsigned i=0; i<ntop; ++i) {
-        TEST( std::get<2>(fields[i]) ) // test impact metric
+        // TEST( std::get<2>(fields[i]) ) // test impact metric
         order.push_back(&std::get<0>(fields[i])->first);
       }
 

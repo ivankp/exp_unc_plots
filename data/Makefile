@@ -10,17 +10,17 @@ all: $(DATA2)
 $(DATA1):
 	dl.sh
 
-hepdata1.dat: ATLAS_Run2_v4.HepData
+hepdata1.dat: ATLAS_Run2_v3.HepData
 	convert_hepdata $^ | edit -o $@ --sym
 
 hepdata2.dat: hepdata1.dat
-	edit $^ -o $@ --add=fit fit bkg_model_uncorr
+	edit $^ -o $@ --qadd=fit fit bkg_model_uncorr
 
 mc.dat: MCpredictions_v3.data hepdata2.dat
-	mc.sh $^ | edit -o $@ --add-except=xsec
+	mc.sh $^ | edit -o $@ --add-except=xsec --prec=4
 
 uncert.dat: hepdata2.dat mc.dat
-	edit $^ -o $@ --add-except=corr xsec stat lumi fit --tol=0.01 \
+	edit $^ -o $@ --qadd-except=corr xsec stat lumi fit --tol=0.05 \
 	  --order xsec lumi corr fit stat
 
 uncert_corr.dat: hepdata2.dat

@@ -196,8 +196,8 @@ int main(int argc, char* argv[]) {
       bands.emplace_back(h,val.first);
 
       auto* arr = bands.back().h1->GetArray() + 1;
-      // fill with x*x to sum in quadrature
-      for (double x : val.second | ::stod) (*arr) = x*x, ++arr;
+      // fill with squares to sum in quadrature
+      for (const auto& x : val.second) (*arr) = sq(::stod(x)), ++arr;
     }
 
     TAxis *xa = bands.back().h1->GetXaxis(),
@@ -230,12 +230,12 @@ int main(int argc, char* argv[]) {
         "f");
     }
 
-    // reflect & take sqrt ------------------------------------------
+    // reflect, take sqrt, divide by xsec ---------------------------
     for (const auto& b : bands) {
       auto* arr1 = b.h1->GetArray();
       auto* arr2 = b.h2->GetArray();
       for (unsigned j=nbins; j; --j)
-        arr2[j] = -(arr1[j] = std::sqrt(arr1[j]));
+        arr2[j] = -(arr1[j] = std::sqrt(arr1[j])/xsec[j-1]);
     }
 
     // set Y-range --------------------------------------------------
