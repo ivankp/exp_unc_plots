@@ -20,6 +20,9 @@
 #define TEST(var) \
   std::cerr << tc::cyan << #var << tc::reset << " = " << var << std::endl;
 
+#define STR_IMPL(x) #x
+#define STR(x) STR_IMPL(x)
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -74,9 +77,9 @@ auto make_replacer(const char* filename) {
 int main(int argc, char* argv[]) {
   std::string ofname;
   const char *ifname,
-             *vars_tex = "vars.tex",
-             *unc_tex = "unc.tex",
-             *style_file = "blue.sty",
+             *vars_tex = STR(CONFIG) "/vars.tex",
+             *unc_tex = STR(CONFIG) "/unc.tex",
+             *style_file = STR(CONFIG) "/blue.sty",
              *ylabel = "",
              *ranges_file = nullptr;
   std::array<float,4> margins { 0.1, 0.035, 0.13, 0.03 };

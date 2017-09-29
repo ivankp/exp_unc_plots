@@ -16,7 +16,7 @@ rpath_script := ldd `root-config --libdir`/libTreePlayer.so \
   | sed 's/^/-Wl,-rpath=/'
 ROOT_LIBS += $(shell $(rpath_script))
 
-C_plot := $(ROOT_CFLAGS)
+C_plot := $(ROOT_CFLAGS) -DCONFIG=$(shell pwd -P)/config
 L_plot := $(ROOT_LIBS)
 
 L_edit := -lboost_regex

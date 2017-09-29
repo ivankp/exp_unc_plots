@@ -1,4 +1,4 @@
-export PATH := ../bin:../scr:$(PATH)
+PATH := ../bin:../scr:$(PATH)
 
 .PHONY: all clean cleanall
 
