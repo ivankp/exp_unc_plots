@@ -54,6 +54,7 @@ auto make_replacer(const char* filename) {
   std::unordered_map<std::string,std::string> map;
   std::ifstream f(filename);
   for (std::string line; std::getline(f,line); ) {
+    if (line.empty() || line[0]=='#') continue;
     const auto d1 = line.find(' ');
     const auto d2 = line.find_first_not_of(' ',d1);
     map.emplace(line.substr(0,d1),line.substr(d2));
@@ -63,16 +64,6 @@ auto make_replacer(const char* filename) {
     catch (...) { return name; }
   };
 }
-
-// template <typename V1, typename V2>
-// V1&& operator+=(V1&& v1, const V2& v2) {
-//   auto it1 = v1.begin();
-//   auto it2 = v2.begin();
-//   for ( ; it1 != v1.end(); ++it1, ++it2) {
-//     (*it1) = std::sqrt(sq(*it1,*it2));
-//   }
-//   return std::forward<V1>(v1);
-// }
 
 int main(int argc, char* argv[]) {
   std::string ofname;
@@ -144,6 +135,7 @@ int main(int argc, char* argv[]) {
   std::unordered_map<std::string,double> ranges;
   { std::ifstream f(ranges_file);
     for (std::string line; std::getline(f,line); ) {
+      if (line.empty() || line[0]=='#') continue;
       const auto d1 = line.find(' ');
       const auto d2 = line.find_first_not_of(' ',d1);
       ranges.emplace(line.substr(0,d1),::stod(line.substr(d2)));

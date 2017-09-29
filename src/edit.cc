@@ -303,9 +303,10 @@ int main(int argc, char* argv[]) {
           return std::get<0>(a) > std::get<0>(b); });
 
       // keep order of top contributions
-      for (unsigned i=0; i<ntop; ++i) {
-        // TEST( std::get<2>(fields[i]) ) // test impact metric
+      for (unsigned i=ntop-1; ; ) {
         order.push_back(&std::get<0>(fields[i])->first);
+        if (i==0) break;
+        --i;
       }
 
       // sum others in quadrature and erase contributions
